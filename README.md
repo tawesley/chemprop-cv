@@ -17,11 +17,67 @@
 
 Chemprop is a repository containing message passing neural networks for molecular property prediction.
 
+> ### This is a fork
+>
+> This repository is [Chemprop v2.2.3](https://github.com/chemprop/chemprop/tree/v2.2.3) with one
+> addition: **k-fold cross-validation splitting**, via a `--cross-validation` option on
+> `chemprop train`. Everything else is upstream and unmodified. See
+> [Cross-validation splitting](#cross-validation-splitting) below.
+
 Documentation can be found [here](https://chemprop.readthedocs.io/en/main/).
 
 There are tutorial notebooks in the [`examples/`](https://github.com/chemprop/chemprop/tree/main/examples) directory.
 
 Chemprop recently underwent a ground-up rewrite and new major release (v2.0.0). A helpful transition guide from Chemprop v1 to v2 can be found [here](https://docs.google.com/spreadsheets/u/3/d/e/2PACX-1vRshySIknVBBsTs5P18jL4WeqisxDAnDE5VRnzxqYEhYrMe4GLS17w5KeKPw9sged6TmmPZ4eEZSTIy/pubhtml). This includes a side-by-side comparison of CLI argument options, a list of which arguments will be implemented in later versions of v2, and a list of changes to default hyperparameters.
+
+## Cross-validation splitting
+
+Upstream Chemprop draws a single train/validation/test partition and uses `--num-replicates` to
+repeat it under different random seeds, so each replicate holds out a different arbitrary slice and
+some datapoints are never tested. This fork adds proper k-fold cross-validation, in which every
+datapoint is held out exactly once.
+
+```bash
+chemprop train --data-path data.csv --task-type regression \
+    --split scaffold_balanced --cross-validation cv --num-replicates 5
+```
+
+`--num-replicates` is the number of folds, k. Two modes are available:
+
+| Mode | Per replicate | Minimum k |
+| --- | --- | --- |
+| `cv` | k-2 folds train, 1 fold validation, 1 fold test | 3 |
+| `cv_notest` | k-1 folds train, 1 fold validation, no test set | 2 |
+
+In `cv`, the test fold and the validation fold both rotate, so each datapoint is used for testing
+exactly once and for validation exactly once. Use `cv_notest` when you do not need a held-out test
+set and would rather train on more data; `cv` keeps a separate validation fold so early stopping
+never selects on the test fold.
+
+Results are written to one `replicate_<i>/` directory per fold, exactly as `--num-replicates`
+already does without cross-validation.
+
+### Folds respect the split type
+
+Folds are built from whole split units rather than individual datapoints, so the grouping guarantee
+of `--split` carries over to cross-validation. With `scaffold_balanced`, a Bemis-Murcko scaffold
+sits entirely inside one fold and never appears in both the training and the test fold of the same
+replicate; `random_with_repeated_smiles` keeps copies of a SMILES together, and `kmeans` keeps a
+cluster together. All five split types are supported.
+
+Units are assigned largest-first to the currently smallest fold, so folds come out as even as the
+grouping allows. Grouped splits give uneven folds by nature: if one scaffold covers a third of the
+dataset, the fold holding it is at least that large. Asking for more folds than there are groups is
+an error rather than a silent fallback.
+
+### Notes
+
+- `--split-sizes` does not apply under `--cross-validation`, since fold sizes follow from k. The CLI
+  warns if it is passed anyway.
+- `--cross-validation` cannot be combined with `--splits-column` or `--splits-file`, which specify
+  splits explicitly, and requires a single `--data-path`.
+- The Python API is `chemprop.data.make_split_indices(..., cross_validation="cv")`, which returns
+  the same `(train, val, test)` tuple of per-replicate index lists as usual.
 
 **License:** Chemprop is free to use under the [MIT License](LICENSE.txt). The Chemprop logo is free to use under [CC0 1.0](docs/source/_static/images/logo/LICENSE.txt).
 
