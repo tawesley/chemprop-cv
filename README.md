@@ -23,6 +23,10 @@ Chemprop is a repository containing message passing neural networks for molecula
 > addition: **k-fold cross-validation splitting**, via a `--cross-validation` option on
 > `chemprop train`. Everything else is upstream and unmodified. See
 > [Cross-validation splitting](#cross-validation-splitting) below.
+>
+> This repository only changes two files:
+>   chemprop/cli/train.py
+>   chemprop/data/splitting.py
 
 Documentation can be found [here](https://chemprop.readthedocs.io/en/main/).
 
