@@ -77,6 +77,15 @@ _CV_REMOVAL_ERROR = (
     "The -k/--num-folds argument was removed in v2.1.0 - use --num-replicates instead."
 )
 
+
+_DEFAULT_SPLIT_SIZES = [0.8, 0.1, 0.1]
+
+
+def _cross_validation_type(value: str) -> str:
+    value = value.lower().replace("-", "_")
+    return "cv_notest" if value == "cv_no_test" else value
+
+
 _ACTIVATION_FUNCTIONS = OrderedDict(
     {
         uppercase(func): getattr(nn.modules.activation, func)
@@ -541,7 +550,7 @@ def add_train_args(parser: ArgumentParser) -> ArgumentParser:
         "--split-sizes",
         type=float,
         nargs=3,
-        default=[0.8, 0.1, 0.1],
+        default=_DEFAULT_SPLIT_SIZES,
         help="Split proportions for train/validation/test sets",
     )
     split_args.add_argument(
@@ -550,7 +559,21 @@ def add_train_args(parser: ArgumentParser) -> ArgumentParser:
         default=0,
         help="Specify the index of the key molecule used for splitting when multiple molecules are present and constrained split_type is used (e.g., ``scaffold_balanced`` or ``random_with_repeated_smiles``). Note that this index begins with zero for the first molecule.",
     )
-    split_args.add_argument("--num-replicates", type=int, default=1, help="Number of replicates.")
+    split_args.add_argument(
+        "--num-replicates",
+        type=int,
+        default=1,
+        help="Number of replicates, or number of folds when --cross-validation is set.",
+    )
+    split_args.add_argument(
+        "--cross-validation",
+        type=_cross_validation_type,
+        choices=["cv", "cv_notest"],
+        help=(
+            "Use cross-validation splitting with --num-replicates folds. Use 'cv' for "
+            "train/validation/test folds or 'cv_notest' for train/validation folds with no test set."
+        ),
+    )
     split_args.add_argument("-k", "--num-folds", help=_CV_REMOVAL_ERROR)
     split_args.add_argument(
         "--save-smiles-splits",
@@ -597,6 +620,40 @@ def validate_train_args(args):
 
     if args.num_folds is not None:  # i.e. user-specified
         raise ArgumentError(argument=None, message=_CV_REMOVAL_ERROR)
+
+    if args.cross_validation is not None:
+        min_replicates = 3 if args.cross_validation == "cv" else 2
+        if args.num_replicates < min_replicates:
+            raise ArgumentError(
+                argument=None,
+                message=(
+                    f"--cross-validation {args.cross_validation} requires "
+                    f"--num-replicates >= {min_replicates}."
+                ),
+            )
+        if len(args.data_path) != 1:
+            raise ArgumentError(
+                argument=None,
+                message="--cross-validation can only be used when a single data file is supplied.",
+            )
+        if args.splits_column is not None or args.splits_file is not None:
+            raise ArgumentError(
+                argument=None,
+                message="--cross-validation cannot be combined with --splits-column or --splits-file.",
+            )
+        if args.split_sizes != _DEFAULT_SPLIT_SIZES:
+            # Fold sizes come from the number of folds, so --split-sizes has no effect here.
+            # Silently ignoring it reads as though the requested proportions were honoured.
+            layout = (
+                "k-2 folds train / 1 fold validation / 1 fold test"
+                if args.cross_validation == "cv"
+                else "k-1 folds train / 1 fold validation / no test set"
+            )
+            logger.warning(
+                f"--split-sizes {args.split_sizes} is ignored when --cross-validation is set. "
+                f"With --cross-validation {args.cross_validation} and --num-replicates "
+                f"{args.num_replicates} (k), each replicate is {layout}."
+            )
 
     for path in args.data_path:
         if path.suffix not in [".csv"]:
@@ -1151,7 +1208,12 @@ def build_splits(args, format_kwargs, featurization_kwargs):
                     splitting_mols = [datapoint.mol for datapoint in splitting_data]
 
             train_indices, val_indices, test_indices = make_split_indices(
-                splitting_mols, args.split, args.split_sizes, args.data_seed, args.num_replicates
+                splitting_mols,
+                args.split,
+                args.split_sizes,
+                args.data_seed,
+                args.num_replicates,
+                cross_validation=getattr(args, "cross_validation", None),
             )
 
         train_data, val_data, test_data = split_data_by_indices(
