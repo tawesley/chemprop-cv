@@ -201,8 +201,7 @@ def _make_cross_validation_split_indices(
         cross_validation = "cv_notest"
     if cross_validation not in {"cv", "cv_notest"}:
         raise ValueError(
-            "cross_validation must be one of 'cv' or 'cv_notest' "
-            f"(got {cross_validation!r})."
+            "cross_validation must be one of 'cv' or 'cv_notest' " f"(got {cross_validation!r})."
         )
 
     n_datapoints = len(mols)
@@ -237,12 +236,7 @@ def _make_cross_validation_split_indices(
             ]
         else:
             test = []
-            train = [
-                idx
-                for i, fold in enumerate(folds)
-                if i != val_fold_idx
-                for idx in fold
-            ]
+            train = [idx for i, fold in enumerate(folds) if i != val_fold_idx for idx in fold]
 
         train_replicates.append(train)
         val_replicates.append(val)
@@ -252,10 +246,7 @@ def _make_cross_validation_split_indices(
 
 
 def _make_cv_fold_units(
-    mols: Sequence[Chem.Mol] | Sized,
-    split: SplitType | str,
-    seed: int,
-    num_folds: int,
+    mols: Sequence[Chem.Mol] | Sized, split: SplitType | str, seed: int, num_folds: int
 ) -> list[list[int]]:
     n_datapoints = len(mols)
     rng = np.random.default_rng(seed)
@@ -299,11 +290,15 @@ def _make_cv_fold_units(
             from sklearn.cluster import KMeans as sk_KMeans
 
             x = featurize_molecules(np.array(mols), "morgan_fingerprint", dict(n_bits=2048))
-            labels = sk_KMeans(
-                n_clusters=max(floor(n_datapoints * 0.1) + 1, num_folds),
-                n_init=1,
-                random_state=seed,
-            ).fit(x).labels_
+            labels = (
+                sk_KMeans(
+                    n_clusters=max(floor(n_datapoints * 0.1) + 1, num_folds),
+                    n_init=1,
+                    random_state=seed,
+                )
+                .fit(x)
+                .labels_
+            )
             groups = [np.where(labels == label)[0].tolist() for label in np.unique(labels)]
             return _shuffle_groups_for_cv(groups, rng)
 
