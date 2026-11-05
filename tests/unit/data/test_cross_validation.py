@@ -129,9 +129,7 @@ def test_different_seed_gives_different_folds(mol_data):
 
 @pytest.mark.parametrize("alias", ["cv_notest", "cv-no-test", "CV_No_Test", "CV-NOTEST"])
 def test_cv_notest_aliases_accepted(mol_data, alias):
-    _, _, test = make_split_indices(
-        mols=mol_data, num_replicates=3, cross_validation=alias
-    )
+    _, _, test = make_split_indices(mols=mol_data, num_replicates=3, cross_validation=alias)
     assert all(fold == [] for fold in test)
 
 
@@ -153,17 +151,12 @@ def test_too_few_folds_raises(mol_data, cross_validation, num_replicates):
 
 def test_more_folds_than_datapoints_raises(mol_data):
     with pytest.raises(ValueError, match="invalid number of CV folds"):
-        make_split_indices(
-            mols=mol_data, num_replicates=len(mol_data) + 1, cross_validation="cv"
-        )
+        make_split_indices(mols=mol_data, num_replicates=len(mol_data) + 1, cross_validation="cv")
 
 
 def test_more_folds_than_split_groups_raises(mol_data):
     """Only four scaffolds exist, so a fifth scaffold fold cannot be filled."""
     with pytest.raises(ValueError, match="only 4 split groups"):
         make_split_indices(
-            mols=mol_data,
-            split="scaffold_balanced",
-            num_replicates=5,
-            cross_validation="cv",
+            mols=mol_data, split="scaffold_balanced", num_replicates=5, cross_validation="cv"
         )
